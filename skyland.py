@@ -277,7 +277,7 @@ def get_binding_list():
     resp = requests.get(binding_url, headers=get_sign_header(binding_url, 'get', None, http_local.header)).json()
     
     for i in resp['data']['list']:
-    print("APP:", i.get('appCode'), "NAME:", i.get('appName'), "LIST:", i.get('bindingList'))
+        print("APP:", i.get('appCode'), "NAME:", i.get('appName'), "LIST:", i.get('bindingList'))
         if i.get('appCode') != 'arknights':
         continue
         v.extend(i.get('bindingList'))
