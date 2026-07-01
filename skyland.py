@@ -370,9 +370,13 @@ def sign_for_endfield(data: dict):
     for role in roles:
         nickname = role.get('nickname') or data.get('nickName') or '未知角色'
 
-        resp = do_sign_for_endfield(role)
-        print("ENDFIELD_RESP:", j)
-        j = resp.json()
+        try:
+            resp = do_sign_for_endfield(role)
+            j = resp.json()
+            print("ENDFIELD_RESP:", j)
+        except Exception as e:
+            result.append(f'[{game_name}] 角色{nickname}({channel})签到失败！原因：请求异常，{e}')
+            continue
 
         if j.get('code') != 0:
             result.append(f'[{game_name}] 角色{nickname}({channel})签到失败！原因：{j.get("message")}')
@@ -390,7 +394,10 @@ def sign_for_endfield(data: dict):
             award_count = award_info.get('count', 1)
             awards_result.append(f'{award_name}×{award_count}')
 
-        result.append(f'[{game_name}] 角色{nickname}({channel})签到成功，获得了：{",".join(awards_result)}')
+        if awards_result:
+            result.append(f'[{game_name}] 角色{nickname}({channel})签到成功，获得了：{",".join(awards_result)}')
+        else:
+            result.append(f'[{game_name}] 角色{nickname}({channel})签到成功，但未解析到奖励')
 
     return result
 
