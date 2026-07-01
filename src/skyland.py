@@ -190,6 +190,11 @@ def get_binding_list():
         for j in i.get('bindingList'):
             j['appCode'] = i['appCode']
         v.extend(i['bindingList'])
+    for i in resp['data']['list']:
+    print("APP:", i.get('appCode'), "NAME:", i.get('appName'), "LIST:", i.get('bindingList'))
+    if i.get('appCode') != 'arknights':
+        continue
+    v.extend(i.get('bindingList'))
     return v
 
 
