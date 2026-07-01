@@ -282,10 +282,18 @@ def get_binding_list():
             os.remove(token_save_name)
             return []
     for i in resp['data']['list']:
-        print("APP:", i.get('appCode'), "NAME:", i.get('appName'), "LIST:", i.get('bindingList'))
-        if i.get('appCode') != 'arknights':
+        app_code = i.get('appCode')
+        app_name = i.get('appName')
+        binding_list = i.get('bindingList') or []
+    
+        # 支持明日方舟和终末地
+        if app_code not in ['arknights', 'endfield']:
             continue
-        v.extend(i.get('bindingList'))
+    
+        for role in binding_list:
+            role['appCode'] = app_code
+            role['appName'] = app_name
+            v.append(role)
     return v
 
 def list_awards(game_id, uid):
@@ -302,20 +310,24 @@ def do_sign(cred_resp):
 
     for i in characters:
         body = {
-            'gameId': 1,
+            'gameId': i.get('gameId'),
             'uid': i.get('uid')
         }
         resp = requests.post(sign_url, headers=get_sign_header(sign_url, 'post', body, http_local.header),
                              json=body).json()
         if resp['code'] != 0:
-            msg = f'角色{i.get("nickName")}({i.get("channelName")})签到失败！原因：{resp.get("message")}'
+            role_name = i.get("nickName") or i.get("defaultRole", {}).get("nickname") or "未知角色"
+            game_name = i.get("gameName") or i.get("appName") or "未知游戏"
+            msg = f'{game_name} 角色{role_name}({i.get("channelName")})签到失败！原因：{resp.get("message")}'
             print(msg)
             logs_out.append(msg)
             continue
         awards = resp['data']['awards']
         for j in awards:
             res = j['resource']
-            msg = f'角色{i.get("nickName")}({i.get("channelName")})签到成功，获得了{res["name"]}×{j.get("count") or 1}'
+            role_name = i.get("nickName") or i.get("defaultRole", {}).get("nickname") or "未知角色"
+            game_name = i.get("gameName") or i.get("appName") or "未知游戏"
+            msg = f'{game_name} 角色{role_name}({i.get("channelName")})签到成功，获得了{res["name"]}×{j.get("count") or 1}'
             print(msg)
             logs_out.append(msg)
 
