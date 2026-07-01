@@ -275,6 +275,14 @@ def get_cred(grant):
 def get_binding_list():
     v = []
     resp = requests.get(binding_url, headers=get_sign_header(binding_url, 'get', None, http_local.header)).json()
+    
+    for i in resp['data']['list']:
+    print("APP:", i.get('appCode'), "NAME:", i.get('appName'), "LIST:", i.get('bindingList'))
+
+    if i.get('appCode') != 'arknights':
+        continue
+
+    v.extend(i.get('bindingList'))
     if resp['code'] != 0:
         print(f"请求角色列表出现问题：{resp['message']}")
         if resp.get('message') == '用户未登录':
