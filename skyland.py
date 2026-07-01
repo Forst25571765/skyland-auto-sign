@@ -67,9 +67,11 @@ header_for_sign = {
     'dId': '',
     'vName': ''
 }
-
 # 签到url
-sign_url = "https://zonai.skland.com/api/v1/game/attendance"
+sign_url_mapping = {
+    'arknights': 'https://zonai.skland.com/api/v1/game/attendance',
+    'endfield': 'https://zonai.skland.com/web/v1/game/endfield/attendance'
+}
 # 绑定的角色url
 binding_url = "https://zonai.skland.com/api/v1/game/player/binding"
 # 验证码url
@@ -274,64 +276,142 @@ def get_cred(grant):
 
 def get_binding_list():
     v = []
-    resp = requests.get(binding_url, headers=get_sign_header(binding_url, 'get', None, http_local.header)).json()
+    resp = requests.get(
+        binding_url,
+        headers=get_sign_header(binding_url, 'get', None, http_local.header)
+    ).json()
+
     if resp['code'] != 0:
         print(f"请求角色列表出现问题：{resp['message']}")
         if resp.get('message') == '用户未登录':
             print(f'用户登录可能失效了，请重新运行此程序！')
             os.remove(token_save_name)
             return []
-    for i in resp['data']['list']:
-        app_code = i.get('appCode')
-        app_name = i.get('appName')
-        binding_list = i.get('bindingList') or []
-    
-        # 支持明日方舟和终末地
-        if app_code not in ['arknights', 'endfield']:
+
+    for game in resp['data']['list']:
+        app_code = game.get('appCode')
+        app_name = game.get('appName')
+        binding_list = game.get('bindingList') or []
+
+        # 只处理明日方舟和终末地
+        if app_code not in ('arknights', 'endfield'):
             continue
-    
+
         for role in binding_list:
             role['appCode'] = app_code
             role['appName'] = app_name
             v.append(role)
+
     return v
 
 def list_awards(game_id, uid):
     resp = requests.get(sign_url, headers=http_local.header, params={'gameId': game_id, 'uid': uid}).json()
     print(resp)
 
+def sign_for_arknights(data: dict):
+    """明日方舟签到"""
+    body = {
+        'gameId': data.get('gameId'),
+        'uid': data.get('uid')
+    }
+
+    url = sign_url_mapping['arknights']
+    headers = get_sign_header(url, 'post', body, http_local.header)
+    resp = requests.post(url, headers=headers, json=body).json()
+
+    game_name = data.get('gameName') or data.get('appName') or '明日方舟'
+    channel = data.get("channelName") or ''
+    nickname = data.get('nickName') or ''
+
+    if resp.get('code') != 0:
+        return [f'[{game_name}] 角色{nickname}({channel})签到失败！原因：{resp.get("message")}']
+
+    awards = resp.get('data', {}).get('awards', [])
+    awards_result = []
+
+    for award in awards:
+        res = award.get('resource', {})
+        award_name = res.get('name', '未知奖励')
+        award_count = award.get('count') or res.get('count') or 1
+        awards_result.append(f'{award_name}×{award_count}')
+
+    return [f'[{game_name}] 角色{nickname}({channel})签到成功，获得了：{",".join(awards_result)}']
+
+
+def do_sign_for_endfield(role: dict):
+    """终末地单角色签到"""
+    url = sign_url_mapping['endfield']
+    headers = get_sign_header(url, 'post', None, http_local.header)
+
+    headers.update({
+        'Content-Type': 'application/json',
+        'sk-game-role': f'3_{role["roleId"]}_{role["serverId"]}',
+        'referer': 'https://game.skland.com/',
+        'origin': 'https://game.skland.com/'
+    })
+
+    return requests.post(url, headers=headers)
+
+
+def sign_for_endfield(data: dict):
+    """终末地签到"""
+    roles = data.get('roles') or []
+    game_name = data.get('gameName') or data.get('appName') or '明日方舟：终末地'
+    channel = data.get("channelName") or ''
+    result = []
+
+    if not roles:
+        return [f'[{game_name}] 未找到可签到角色']
+
+    for role in roles:
+        nickname = role.get('nickname') or data.get('nickName') or '未知角色'
+
+        resp = do_sign_for_endfield(role)
+        j = resp.json()
+
+        if j.get('code') != 0:
+            result.append(f'[{game_name}] 角色{nickname}({channel})签到失败！原因：{j.get("message")}')
+            continue
+
+        result_data = j.get('data') or {}
+        result_info_map = result_data.get('resourceInfoMap') or {}
+        award_ids = result_data.get('awardIds') or []
+
+        awards_result = []
+        for award in award_ids:
+            award_id = award.get('id')
+            award_info = result_info_map.get(award_id, {})
+            award_name = award_info.get('name', '未知奖励')
+            award_count = award_info.get('count', 1)
+            awards_result.append(f'{award_name}×{award_count}')
+
+        result.append(f'[{game_name}] 角色{nickname}({channel})签到成功，获得了：{",".join(awards_result)}')
+
+    return result
+
 def do_sign(cred_resp):
     http_local.token = cred_resp['token']
     http_local.header = header.copy()
     http_local.header['cred'] = cred_resp['cred']
-    characters = get_binding_list()
 
-    logs_out = []  # 新增：用于 Server酱³ 的汇总文本
+    characters = get_binding_list()
+    logs_out = []
 
     for i in characters:
-        body = {
-            'gameId': i.get('gameId'),
-            'uid': i.get('uid')
-        }
-        resp = requests.post(sign_url, headers=get_sign_header(sign_url, 'post', body, http_local.header),
-                             json=body).json()
-        if resp['code'] != 0:
-            role_name = i.get("nickName") or i.get("defaultRole", {}).get("nickname") or "未知角色"
-            game_name = i.get("gameName") or i.get("appName") or "未知游戏"
-            msg = f'{game_name} 角色{role_name}({i.get("channelName")})签到失败！原因：{resp.get("message")}'
-            print(msg)
-            logs_out.append(msg)
+        app_code = i.get('appCode')
+
+        if app_code == 'arknights':
+            messages = sign_for_arknights(i)
+        elif app_code == 'endfield':
+            messages = sign_for_endfield(i)
+        else:
             continue
-        awards = resp['data']['awards']
-        for j in awards:
-            res = j['resource']
-            role_name = i.get("nickName") or i.get("defaultRole", {}).get("nickname") or "未知角色"
-            game_name = i.get("gameName") or i.get("appName") or "未知游戏"
-            msg = f'{game_name} 角色{role_name}({i.get("channelName")})签到成功，获得了{res["name"]}×{j.get("count") or 1}'
+
+        for msg in messages:
             print(msg)
             logs_out.append(msg)
 
-    return logs_out  # 新增：返回给调用方
+    return logs_out
 
 def save(token):
     with open(token_save_name, 'w') as f:
