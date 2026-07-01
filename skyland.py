@@ -278,11 +278,10 @@ def get_binding_list():
     
     for i in resp['data']['list']:
     print("APP:", i.get('appCode'), "NAME:", i.get('appName'), "LIST:", i.get('bindingList'))
-
-    if i.get('appCode') != 'arknights':
+        if i.get('appCode') != 'arknights':
         continue
-
-    v.extend(i.get('bindingList'))
+        v.extend(i.get('bindingList'))
+    
     if resp['code'] != 0:
         print(f"请求角色列表出现问题：{resp['message']}")
         if resp.get('message') == '用户未登录':
